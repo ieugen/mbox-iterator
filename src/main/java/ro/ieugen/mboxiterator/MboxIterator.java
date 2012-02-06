@@ -19,15 +19,11 @@
 package ro.ieugen.mboxiterator;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.Channel;
-import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CharsetEncoder;
 import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,10 +43,9 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     // Charset and decoder for UTF-8
     private final static Charset UTF8_CHARSET = Charset.forName("UTF-8");
     private final static CharsetDecoder DECODER = UTF8_CHARSET.newDecoder();
-    private final FileChannel fileChannel;
+    private final FileInputStream fis;
     private final CharBuffer mboxCharBuffer;
     private final Matcher fromLineMathcer;
-    private final MappedByteBuffer byteBuffer;
     private boolean hasMore;
 
     public MboxIterator(final String fileName)
@@ -61,9 +56,9 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     public MboxIterator(final File mbox)
 	    throws FileNotFoundException, IOException {
 
-	final FileInputStream fis = new FileInputStream(mbox);
-	fileChannel = fis.getChannel();
-	byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
+	fis = new FileInputStream(mbox);
+	final FileChannel fileChannel = fis.getChannel();
+	final MappedByteBuffer byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
 		fileChannel.size());
 	mboxCharBuffer = DECODER.decode(byteBuffer);
 	fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
@@ -81,7 +76,13 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
     @Override
     public void close() throws IOException {
-	fileChannel.close();
+	fis.close();
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+	fis.close();
+	super.finalize();
     }
 
     private class MessageIterator implements Iterator<CharBuffer> {
