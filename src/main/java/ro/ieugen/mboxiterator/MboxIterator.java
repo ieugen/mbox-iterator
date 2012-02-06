@@ -22,6 +22,8 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.Channel;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
@@ -42,10 +44,9 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     private static final Logger LOG = LoggerFactory.getLogger(MboxIterator.class);
     private static final Pattern MESSAGE_START =
 	    Pattern.compile("^From \\S+@\\S.*\\d{4}$", Pattern.MULTILINE);
-    // Charset and decoder for ISO-8859-15
+    // Charset and decoder for UTF-8
     private final static Charset UTF8_CHARSET = Charset.forName("UTF-8");
     private final static CharsetDecoder DECODER = UTF8_CHARSET.newDecoder();
-    private final static CharsetEncoder ENCODER = UTF8_CHARSET.newEncoder();
     private final FileChannel fileChannel;
     private final CharBuffer mboxCharBuffer;
     private final Matcher fromLineMathcer;
@@ -87,7 +88,6 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
 	@Override
 	public boolean hasNext() {
-	    LOG.info("Has more? {}", hasMore);
 	    return hasMore;
 	}
 
@@ -123,24 +123,5 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 	public void remove() {
 	    throw new UnsupportedOperationException("Not supported yet.");
 	}
-    }
-
-    // simple example of how to split an mbox into individual files
-    public static void main(String[] args) throws IOException, FileNotFoundException {
-	final File mbox = new File("/home/ieugen/contracte/firimituri/gmane.test.yahoo/test-utf");
-	long start = System.currentTimeMillis();
-	int count = 0;
-	for (CharBuffer buf : new MboxIterator(mbox)) {
-	    FileOutputStream fout = new FileOutputStream(new File("target/messages/msg-" + count));
-	    FileChannel fileChannel = fout.getChannel();
-	    ByteBuffer buf2 = ENCODER.encode(buf);
-	    fileChannel.write(buf2);
-	    fileChannel.close();
-	    fout.close();
-	    count++;
-	}
-	System.out.println("Found " + count + " messages");
-	long end = System.currentTimeMillis();
-	System.out.println("Done in: " + (end - start) + " milis");
     }
 }

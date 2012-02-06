@@ -1,0 +1,13 @@
+# mbox-iterator
+
+MboxIterator provides an iterator like interface over mbox files. It's designed
+to allow easy parsing with mime4j.
+
+## Dependencies
+
+It has no direct dependencies other than the JDK. 
+
+## Building
+
+The project uses Maven as a build tool.
+
