@@ -32,97 +32,133 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Class that provides an iterator over email messages inside an mbox file.
- * 
+ *
  * @author Ioan Eugen Stan <stan.ieugen@gmail.com>
  */
 public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MboxIterator.class);
-    private static final Pattern MESSAGE_START =
-	    Pattern.compile("^From \\S+@\\S.*\\d{4}$", Pattern.MULTILINE);
-    // Charset and decoder for UTF-8
-    private final static Charset UTF8_CHARSET = Charset.forName("UTF-8");
-    private final static CharsetDecoder DECODER = UTF8_CHARSET.newDecoder();
     private final FileInputStream fis;
     private final CharBuffer mboxCharBuffer;
     private final Matcher fromLineMathcer;
     private boolean hasMore;
 
-    public MboxIterator(final String fileName)
-	    throws FileNotFoundException, IOException {
-	this(new File(fileName));
-    }
+    private MboxIterator(final File mbox,
+            final String charset,
+            final String regexpPattern,
+            final int regexpFlags)
+            throws FileNotFoundException, IOException {
 
-    public MboxIterator(final File mbox)
-	    throws FileNotFoundException, IOException {
+        //TODO: do better exception handling - try to process ome of them maybe? 
 
-	fis = new FileInputStream(mbox);
-	final FileChannel fileChannel = fis.getChannel();
-	final MappedByteBuffer byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
-		fileChannel.size());
-	mboxCharBuffer = DECODER.decode(byteBuffer);
-	fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
-	hasMore = fromLineMathcer.find();
-	if (!hasMore) {
-	    throw new RuntimeException("File does not contain From_ lines! "
-		    + "Maybe not a vaild Mbox.");
-	}
+        fis = new FileInputStream(mbox);
+        final FileChannel fileChannel = fis.getChannel();
+        final MappedByteBuffer byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
+                fileChannel.size());
+        final CharsetDecoder DECODER = Charset.forName(charset).newDecoder();
+        /*TODO: DECODER.decode() this will try to decode the whole file. 
+         * It could be problematic if the file is large (~2gb). 
+         * Improve this by working with chunks.  
+         */
+        mboxCharBuffer = DECODER.decode(byteBuffer);
+        final Pattern MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
+        fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
+        hasMore = fromLineMathcer.find();
+        if (!hasMore) {
+            throw new RuntimeException("File does not contain From_ lines! "
+                    + "Maybe not a vaild Mbox.");
+        }
     }
 
     @Override
     public Iterator<CharBuffer> iterator() {
-	return new MessageIterator();
+        return new MessageIterator();
     }
 
     @Override
     public void close() throws IOException {
-	fis.close();
+        fis.close();
     }
 
     @Override
     protected void finalize() throws Throwable {
-	fis.close();
-	super.finalize();
+        fis.close();
+        super.finalize();
     }
 
     private class MessageIterator implements Iterator<CharBuffer> {
 
-	@Override
-	public boolean hasNext() {
-	    return hasMore;
-	}
+        @Override
+        public boolean hasNext() {
+            return hasMore;
+        }
 
-	@Override
-	public CharBuffer next() {
-	    LOG.info("next() called at offset {}", fromLineMathcer.start());
-	    final CharBuffer message = mboxCharBuffer.slice();
-	    message.position(fromLineMathcer.start());
-	    logBufferDetails(message);
-	    hasMore = fromLineMathcer.find();
-	    if (hasMore) {
-		LOG.info("We limit the buffer to {} ?? {}",
-			fromLineMathcer.start(), fromLineMathcer.end());
-		message.limit(fromLineMathcer.start());
-	    }
-	    return message;
-	}
+        @Override
+        public CharBuffer next() {
+            LOG.info("next() called at offset {}", fromLineMathcer.start());
+            final CharBuffer message = mboxCharBuffer.slice();
+            message.position(fromLineMathcer.start());
+            logBufferDetails(message);
+            hasMore = fromLineMathcer.find();
+            if (hasMore) {
+                LOG.info("We limit the buffer to {} ?? {}",
+                        fromLineMathcer.start(), fromLineMathcer.end());
+                message.limit(fromLineMathcer.start());
+            }
+            return message;
+        }
 
-	private void logBufferDetails(final CharBuffer buffer) {
-	    LOG.info("Buffer details: "
-		    + "\ncapacity:\t" + buffer.capacity()
-		    + "\nlimit:\t" + buffer.limit()
-		    + "\nremaining:\t" + buffer.remaining()
-		    + "\nposition:\t" + buffer.position()
-		    + "\nis direct:\t" + buffer.isDirect()
-		    + "\nhas array:\t" + buffer.hasArray()
-		    + "\nbuffer:\t" + buffer.isReadOnly()
-		    + "\nclass:\t" + buffer.getClass()
-		    + "\nlengt:\t" + buffer.length());
-	}
+        private void logBufferDetails(final CharBuffer buffer) {
+            LOG.info("Buffer details: "
+                    + "\ncapacity:\t" + buffer.capacity()
+                    + "\nlimit:\t" + buffer.limit()
+                    + "\nremaining:\t" + buffer.remaining()
+                    + "\nposition:\t" + buffer.position()
+                    + "\nis direct:\t" + buffer.isDirect()
+                    + "\nhas array:\t" + buffer.hasArray()
+                    + "\nbuffer:\t" + buffer.isReadOnly()
+                    + "\nclass:\t" + buffer.getClass()
+                    + "\nlengt:\t" + buffer.length());
+        }
 
-	@Override
-	public void remove() {
-	    throw new UnsupportedOperationException("Not supported yet.");
-	}
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+    }
+
+    public static class Builder {
+
+        private final File file;
+        private String charset = "UTF-8";
+        private String regexpPattern = "^From \\S+@\\S.*\\d{4}$";
+        private int flags = Pattern.MULTILINE;
+
+        public Builder(String filePath) {
+            this(new File(filePath));
+        }
+
+        public Builder(File file) {
+            this.file = file;
+        }
+
+        public Builder charset(String charset) {
+            this.charset = charset;
+            return this;
+        }
+
+        public Builder fromLine(String fromLine) {
+            this.regexpPattern = fromLine;
+            return this;
+        }
+
+        public Builder flags(int flags) {
+            this.flags = flags;
+            return this;
+        }
+
+        public MboxIterator build() throws FileNotFoundException, IOException {
+            return new MboxIterator(file, charset, regexpPattern, flags);
+        }
     }
 }
