@@ -41,10 +41,10 @@ public class MboxIteratorExample {
 
     // simple example of how to split an mbox into individual files
     public static void main(String[] args) throws IOException, FileNotFoundException {
-        final File mbox = new File("/home/ieugen/contracte/firimituri/gmane.test.yahoo/test-utf");
+        final File mbox = new File("/home/estan/gmail2.mbox");
         long start = System.currentTimeMillis();
         int count = 0;
-        for (CharBuffer buf : new MboxIterator.Builder(mbox).build()) {
+        for (CharBuffer buf : new MboxIterator.Builder(mbox).charset("ISO-8859-1").build()) {
             FileOutputStream fout = new FileOutputStream(new File("target/messages/msg-" + count));
             FileChannel fileChannel = fout.getChannel();
             ByteBuffer buf2 = ENCODER.encode(buf);
