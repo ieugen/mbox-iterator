@@ -35,18 +35,19 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     private final FileInputStream fis;
     private final CharBuffer mboxCharBuffer;
     private final Matcher fromLineMathcer;
+    private final Pattern MESSAGE_START;
+    private CoderResult decodeResult;
     private boolean hasMore;
-    
+
     /**
-     * Returns a {@link java.lang.Iterable} over an mbox file and returns
-     * each message as a {@link java.nio.CharBuffer}.
-     * 
+     * Returns a {@link java.lang.Iterable} over an mbox file and returns each message as a {@link java.nio.CharBuffer}.
+     *
      * @param mbox the mbox formated file
      * @param charset the encoding for the file
      * @param regexpPattern the From_ line regex to find message boundaries
      * @param regexpFlags the flags used by the regex. default is {@link java.util.regex.Pattern.MULTILINE}
      * @throws FileNotFoundException exception if mbox is not found
-     * @throws IOException 
+     * @throws IOException
      */
     private MboxIterator(final File mbox,
             final String charset,
@@ -54,7 +55,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
             final int regexpFlags)
             throws FileNotFoundException, IOException {
 
-        //TODO: do better exception handling - try to process ome of them maybe? 
+        //TODO: do better exception handling - try to process some of them maybe? 
 
         fis = new FileInputStream(mbox);
         final FileChannel fileChannel = fis.getChannel();
@@ -62,9 +63,11 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                 fileChannel.size());
         final CharsetDecoder DECODER = Charset.forName(charset).newDecoder();
         mboxCharBuffer = CharBuffer.allocate(MAX_MSG_LENGTH);
-        CoderResult result = DECODER.decode(byteBuffer, mboxCharBuffer, false);
-        
-        final Pattern MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
+        decodeResult = DECODER.decode(byteBuffer, mboxCharBuffer, false);
+        if (decodeResult.isError()) {
+            throw new RuntimeException("Error decoding buffer: " + decodeResult.toString());
+        }
+        MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
         fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
         hasMore = fromLineMathcer.find();
         if (!hasMore) {
@@ -88,6 +91,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         fis.close();
         super.finalize();
     }
+
     /**
      * Private class that implements the {@link java.util.Iterator} over the mbox file.
      */
@@ -123,7 +127,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                     + "\nhas array:\t" + buffer.hasArray()
                     + "\nbuffer:\t" + buffer.isReadOnly()
                     + "\nclass:\t" + buffer.getClass()
-                    + "\nlengt:\t" + buffer.length());
+                    + "\nlength:\t" + buffer.length());
         }
 
         @Override
@@ -131,16 +135,16 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
             throw new UnsupportedOperationException("Not supported yet.");
         }
     }
-    
+
     /**
      * Convenience class for building an {@link MboxIterator} object by using chaining.
      */
     public static class Builder {
-        
+
         private final File file;
-        private String charset = "UTF-8";
+        private String fileCharset = "UTF-8";
         private String regexpPattern = "^From \\S+@\\S.*\\d{4}$";
-        private int flags = Pattern.MULTILINE;
+        private int regexpFlags = Pattern.MULTILINE;
 
         public Builder(String filePath) {
             this(new File(filePath));
@@ -148,49 +152,56 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
         /**
          * The only mandatory field is the file name.
+         *
          * @param file mbox file name
          */
         public Builder(File file) {
             this.file = file;
         }
+
         /**
          * Specify the charset used to open the mbox file. Default is "UTF-8".
+         *
          * @param charset charset
          * @return this
          */
         public Builder charset(String charset) {
-            this.charset = charset;
+            this.fileCharset = charset;
             return this;
         }
+
         /**
-         * Regular expression to mark the From_ line. Default is:
-         * "^From \\S+@\\S.*\\d{4}$"
+         * Regular expression to mark the From_ line. Default is: "^From \\S+@\\S.*\\d{4}$"
+         *
          * @param fromLine
-         * @return 
+         * @return
          */
         public Builder fromLine(String fromLine) {
             this.regexpPattern = fromLine;
             return this;
         }
+
         /**
-         * Flags used for creating the regular expression. Default is 
+         * Flags used for creating the regular expression. Default is
          * {@link java.util.regex.Pattern.MULTILINE}
+         *
          * @param flags
-         * @return 
+         * @return
          */
         public Builder flags(int flags) {
-            this.flags = flags;
+            this.regexpFlags = flags;
             return this;
         }
-        
+
         /**
          * Build the actual {@link MboxIterator} object.
-         * @return 
+         *
+         * @return
          * @throws FileNotFoundException
-         * @throws IOException 
+         * @throws IOException
          */
         public MboxIterator build() throws FileNotFoundException, IOException {
-            return new MboxIterator(file, charset, regexpPattern, flags);
+            return new MboxIterator(file, fileCharset, regexpPattern, regexpFlags);
         }
     }
 }
