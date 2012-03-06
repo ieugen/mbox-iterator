@@ -24,6 +24,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CoderResult;
 import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,9 +46,10 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     private CharBuffer primary;
 
     private MboxIterator(final File mbox,
-            final String charset,
-            final String regexpPattern,
-            final int regexpFlags)
+                         final String charset,
+                         final String regexpPattern,
+                         final int regexpFlags,
+                         final int MAX_MESSAGE_SIZE)
             throws FileNotFoundException, IOException {
 
         //TODO: do better exception handling - try to process ome of them maybe? 
@@ -55,13 +57,18 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         fis = new FileInputStream(mbox);
         final FileChannel fileChannel = fis.getChannel();
         final MappedByteBuffer byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
-                fileChannel.size());
+                                                            fileChannel.size());
         final CharsetDecoder DECODER = Charset.forName(charset).newDecoder();
         /*TODO: DECODER.decode() this will try to decode the whole file. 
          * It could be problematic if the file is large (~2gb). 
          * Improve this by working with chunks.  
          */
-        mboxCharBuffer = DECODER.decode(byteBuffer);
+        mboxCharBuffer = CharBuffer.allocate(MAX_MESSAGE_SIZE);
+        CoderResult coderResult = DECODER.decode(byteBuffer, mboxCharBuffer, false);
+        if (coderResult.isError()) {
+            throw new RuntimeException("File does not contain From_ lines! "
+                    + "Maybe not a vaild Mbox.");
+        }
         final Pattern MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
         fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
         hasMore = fromLineMathcer.find();
@@ -87,6 +94,19 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         super.finalize();
     }
 
+    private static void logBufferDetails(final CharBuffer buffer) {
+        LOG.info("Buffer details: "
+                + "\ncapacity:\t" + buffer.capacity()
+                + "\nlimit:\t" + buffer.limit()
+                + "\nremaining:\t" + buffer.remaining()
+                + "\nposition:\t" + buffer.position()
+                + "\nis direct:\t" + buffer.isDirect()
+                + "\nhas array:\t" + buffer.hasArray()
+                + "\nbuffer:\t" + buffer.isReadOnly()
+                + "\nclass:\t" + buffer.getClass()
+                + "\nlength:\t" + buffer.length());
+    }
+
     private class MessageIterator implements Iterator<CharBuffer> {
 
         @Override
@@ -103,23 +123,10 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
             hasMore = fromLineMathcer.find();
             if (hasMore) {
                 LOG.info("We limit the buffer to {} ?? {}",
-                        fromLineMathcer.start(), fromLineMathcer.end());
+                         fromLineMathcer.start(), fromLineMathcer.end());
                 message.limit(fromLineMathcer.start());
             }
             return message;
-        }
-
-        private void logBufferDetails(final CharBuffer buffer) {
-            LOG.info("Buffer details: "
-                    + "\ncapacity:\t" + buffer.capacity()
-                    + "\nlimit:\t" + buffer.limit()
-                    + "\nremaining:\t" + buffer.remaining()
-                    + "\nposition:\t" + buffer.position()
-                    + "\nis direct:\t" + buffer.isDirect()
-                    + "\nhas array:\t" + buffer.hasArray()
-                    + "\nbuffer:\t" + buffer.isReadOnly()
-                    + "\nclass:\t" + buffer.getClass()
-                    + "\nlengt:\t" + buffer.length());
         }
 
         @Override
@@ -134,6 +141,8 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         private String charset = "UTF-8";
         private String regexpPattern = "^From \\S+@\\S.*\\d{4}$";
         private int flags = Pattern.MULTILINE;
+        // default max message size in chars: 10k chars.
+        private int maxMessageSize = 10 * 1024;
 
         public Builder(String filePath) {
             this(new File(filePath));
@@ -158,8 +167,13 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
             return this;
         }
 
+        public Builder maxMessageSize(int maxMessageSize) {
+            this.maxMessageSize = maxMessageSize;
+            return this;
+        }
+
         public MboxIterator build() throws FileNotFoundException, IOException {
-            return new MboxIterator(file, charset, regexpPattern, flags);
+            return new MboxIterator(file, charset, regexpPattern, flags, maxMessageSize);
         }
     }
 }
