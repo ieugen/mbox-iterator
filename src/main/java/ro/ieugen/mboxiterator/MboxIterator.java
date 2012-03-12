@@ -18,7 +18,9 @@
  ****************************************************************/
 package ro.ieugen.mboxiterator;
 
+import com.google.common.base.Charsets;
 import java.io.*;
+import java.nio.Buffer;
 import java.nio.CharBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -46,35 +48,37 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     private CharBuffer primary;
 
     private MboxIterator(final File mbox,
-                         final String charset,
+                         final Charset charset,
                          final String regexpPattern,
                          final int regexpFlags,
                          final int MAX_MESSAGE_SIZE)
             throws FileNotFoundException, IOException {
 
-        //TODO: do better exception handling - try to process ome of them maybe? 
-
+        //TODO: do better exception handling - try to process ome of them maybe?
+        LOG.info("Opening file {}", mbox.getAbsolutePath());
         fis = new FileInputStream(mbox);
         final FileChannel fileChannel = fis.getChannel();
         final MappedByteBuffer byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
                                                             fileChannel.size());
-        final CharsetDecoder DECODER = Charset.forName(charset).newDecoder();
-        /*TODO: DECODER.decode() this will try to decode the whole file. 
-         * It could be problematic if the file is large (~2gb). 
-         * Improve this by working with chunks.  
+        final CharsetDecoder DECODER = charset.newDecoder();
+        /*TODO: DECODER.decode() this will try to decode the whole file.
+         * It could be problematic if the file is large (~2gb).
+         * Improve this by working with chunks.
          */
         mboxCharBuffer = CharBuffer.allocate(MAX_MESSAGE_SIZE);
+        logBufferDetails(byteBuffer);
+        logBufferDetails(mboxCharBuffer);
         CoderResult coderResult = DECODER.decode(byteBuffer, mboxCharBuffer, false);
+        mboxCharBuffer.flip();
         if (coderResult.isError()) {
-            throw new RuntimeException("File does not contain From_ lines! "
-                    + "Maybe not a vaild Mbox.");
+            throw new RuntimeException("Error decoding file! Maybe not be a vaild Mbox.");
         }
         final Pattern MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
         fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
         hasMore = fromLineMathcer.find();
         if (!hasMore) {
             throw new RuntimeException("File does not contain From_ lines! "
-                    + "Maybe not a vaild Mbox.");
+                    + "Maybe not be a vaild Mbox.");
         }
     }
 
@@ -94,7 +98,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         super.finalize();
     }
 
-    private static void logBufferDetails(final CharBuffer buffer) {
+    private static void logBufferDetails(final Buffer buffer) {
         LOG.info("Buffer details: "
                 + "\ncapacity:\t" + buffer.capacity()
                 + "\nlimit:\t" + buffer.limit()
@@ -103,8 +107,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                 + "\nis direct:\t" + buffer.isDirect()
                 + "\nhas array:\t" + buffer.hasArray()
                 + "\nbuffer:\t" + buffer.isReadOnly()
-                + "\nclass:\t" + buffer.getClass()
-                + "\nlength:\t" + buffer.length());
+                + "\nclass:\t" + buffer.getClass());
     }
 
     private class MessageIterator implements Iterator<CharBuffer> {
@@ -116,10 +119,10 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
         @Override
         public CharBuffer next() {
-            //LOG.info("next() called at offset {}", fromLineMathcer.start());
+            LOG.info("next() called at offset {}", fromLineMathcer.start());
             final CharBuffer message = mboxCharBuffer.slice();
             message.position(fromLineMathcer.start());
-            //logBufferDetails(message);
+            logBufferDetails(message);
             hasMore = fromLineMathcer.find();
             if (hasMore) {
                 LOG.info("We limit the buffer to {} ?? {}",
@@ -138,7 +141,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     public static class Builder {
 
         private final File file;
-        private String charset = "UTF-8";
+        private Charset charset = Charsets.UTF_8;
         private String regexpPattern = "^From \\S+@\\S.*\\d{4}$";
         private int flags = Pattern.MULTILINE;
         // default max message size in chars: 10k chars.
@@ -152,7 +155,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
             this.file = file;
         }
 
-        public Builder charset(String charset) {
+        public Builder charset(Charset charset) {
             this.charset = charset;
             return this;
         }

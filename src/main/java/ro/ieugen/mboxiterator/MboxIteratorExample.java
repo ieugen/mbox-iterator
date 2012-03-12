@@ -18,6 +18,7 @@
  ****************************************************************/
 package ro.ieugen.mboxiterator;
 
+import com.google.common.base.Charsets;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -44,7 +45,7 @@ public class MboxIteratorExample {
         final File mbox = new File("/home/estan/gmail2.mbox");
         long start = System.currentTimeMillis();
         int count = 0;
-        for (CharBuffer buf : new MboxIterator.Builder(mbox).charset("ISO-8859-1").build()) {
+        for (CharBuffer buf : new MboxIterator.Builder(mbox).charset(Charsets.UTF_8).build()) {
             FileOutputStream fout = new FileOutputStream(new File("target/messages/msg-" + count));
             FileChannel fileChannel = fout.getChannel();
             ByteBuffer buf2 = ENCODER.encode(buf);

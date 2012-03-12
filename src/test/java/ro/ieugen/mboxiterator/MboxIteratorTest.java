@@ -18,9 +18,13 @@
  ****************************************************************/
 package ro.ieugen.mboxiterator;
 
-import java.util.Iterator;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import com.google.common.base.Charsets;
+import com.google.common.io.Files;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.CharBuffer;
+import org.junit.Assert;
 import org.junit.Test;
 
 /**
@@ -29,30 +33,19 @@ import org.junit.Test;
  */
 public class MboxIteratorTest {
 
+    public static final String MBOX_PATH = "src/test/resources/test-1/mbox.rlug";
+
     /**
      * Test of iterator method, of class MboxIterator.
      */
     @Test
-    public void testIterator() {
+    public void testIterator() throws FileNotFoundException, IOException {
         System.out.println("iterator");
-        MboxIterator instance = null;
-        Iterator expResult = null;
-        Iterator result = instance.iterator();
-        assertEquals(expResult, result);
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
+        int count = 0;
+        for (CharBuffer msg : new MboxIterator.Builder(MBOX_PATH).build()) {
+            char[] message = Files.toString(new File(MBOX_PATH + "-" + count), Charsets.UTF_8).toCharArray();
+            Assert.assertArrayEquals(message, msg.array());
+            count++;
+        }
     }
-
-    /**
-     * Test of close method, of class MboxIterator.
-     */
-    @Test
-    public void testClose() throws Exception {
-        System.out.println("close");
-        MboxIterator instance = null;
-        instance.close();
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
 }
