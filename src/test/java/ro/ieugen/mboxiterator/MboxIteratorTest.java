@@ -53,9 +53,14 @@ public class MboxIteratorTest {
             msg.mark();
             msg.get(ourMsg);
             msg.reset();
-            System.out.println("---------------------------------------------------------------------------- \n" + msg);
+            printCharBuffer(msg);
             Assert.assertArrayEquals("Missmatch with file " + count, message, ourMsg);
             count++;
         }
+    }
+
+    private void printCharBuffer(CharBuffer msg) {
+        System.out.println("---------------------------------------------------------------------------- \n" + msg
+                + "----------------------------------------------------------------------------");
     }
 }

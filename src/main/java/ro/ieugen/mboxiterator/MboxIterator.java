@@ -71,11 +71,10 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         this.mboxCharBuffer = CharBuffer.allocate(MAX_MESSAGE_SIZE);
         this.theFile = new FileInputStream(mbox);
         this.byteBuffer = theFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, theFile.getChannel().size());
-        initMboxIterator(MAX_MESSAGE_SIZE);
+        initMboxIterator();
     }
 
-    private void initMboxIterator(final int MAX_MESSAGE_SIZE) throws IOException,
-                                                                     CharConversionException {
+    private void initMboxIterator() throws IOException, CharConversionException {
         logBufferDetails(byteBuffer);
         decodeNextCharBuffer();
         logBufferDetails(mboxCharBuffer);
@@ -159,6 +158,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
             fromLineFound = fromLineMathcer.find();
             if (fromLineFound) {
                 LOG.info("We limit the buffer to {} ?? {}", fromLineMathcer.start(), fromLineMathcer.end());
+                saveFindPositions(fromLineMathcer);
                 message.limit(fromLineMathcer.start());
             } else {
                 LOG.info("No more From_ lines in this buffer. Bytes remaining {}", byteBuffer.remaining());
@@ -171,7 +171,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                     CharBuffer oldData = mboxCharBuffer.duplicate();
                     mboxCharBuffer.clear();
                     logBufferDetails(mboxCharBuffer);
-                    oldData.position();// asda
+                    oldData.position(findEnd + 1);// asda
                     logBufferDetails(oldData);
                     while (oldData.hasRemaining()) {
                         mboxCharBuffer.put(oldData.get());
