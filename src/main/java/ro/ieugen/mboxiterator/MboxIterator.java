@@ -201,7 +201,15 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         }
     }
 
-    public static class Builder {
+    public static Builder fromFile(File filePath) {
+        return new Builder(filePath);
+    }
+
+    public static Builder fromFile(String file) {
+        return new Builder(file);
+    }
+
+    protected static class Builder {
 
         private final File file;
         private Charset charset = Charsets.UTF_8;
@@ -210,11 +218,11 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         // default max message size in chars: 10k chars.
         private int maxMessageSize = 10 * 1024;
 
-        public Builder(String filePath) {
+        private Builder(String filePath) {
             this(new File(filePath));
         }
 
-        public Builder(File file) {
+        private Builder(File file) {
             this.file = file;
         }
 

@@ -47,7 +47,7 @@ public class MboxIteratorTest {
     public void testIterator() throws FileNotFoundException, IOException {
         LOG.info("Executing {} ", name.getMethodName());
         int count = 0;
-        for (CharBuffer msg : new MboxIterator.Builder(MBOX_PATH).build()) {
+        for (CharBuffer msg : MboxIterator.fromFile(MBOX_PATH).build()) {
             char[] message = Files.toString(new File(MBOX_PATH + "-" + count), Charsets.UTF_8).toCharArray();
             char[] ourMsg = new char[msg.length()];
             msg.mark();
