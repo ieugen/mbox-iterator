@@ -26,6 +26,9 @@ import java.io.IOException;
 import java.nio.CharBuffer;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.rules.TestName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Tests for {@link MboxIterator}.
@@ -33,6 +36,8 @@ import org.junit.Test;
  */
 public class MboxIteratorTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MboxIteratorTest.class);
+    private final TestName name = new TestName();
     public static final String MBOX_PATH = "src/test/resources/test-1/mbox.rlug";
 
     /**
@@ -40,11 +45,16 @@ public class MboxIteratorTest {
      */
     @Test
     public void testIterator() throws FileNotFoundException, IOException {
-        System.out.println("iterator");
+        LOG.info("Executing {} ", name.getMethodName());
         int count = 0;
         for (CharBuffer msg : new MboxIterator.Builder(MBOX_PATH).build()) {
             char[] message = Files.toString(new File(MBOX_PATH + "-" + count), Charsets.UTF_8).toCharArray();
-            Assert.assertArrayEquals(message, msg.array());
+            char[] ourMsg = new char[msg.length()];
+            msg.mark();
+            msg.get(ourMsg);
+            msg.reset();
+            System.out.println("---------------------------------------------------------------------------- \n" + msg);
+            Assert.assertArrayEquals("Missmatch with file " + count, message, ourMsg);
             count++;
         }
     }

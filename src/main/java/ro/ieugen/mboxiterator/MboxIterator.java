@@ -28,6 +28,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.util.Iterator;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -41,45 +42,74 @@ import org.slf4j.LoggerFactory;
 public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MboxIterator.class);
-    private final FileInputStream fis;
+    private final FileInputStream theFile;
     private final CharBuffer mboxCharBuffer;
-    private final Matcher fromLineMathcer;
-    private boolean hasMore;
-    private CharBuffer primary;
+    private Matcher fromLineMathcer;
+    private boolean fromLineFound;
+    private final MappedByteBuffer byteBuffer;
+    private final CharsetDecoder DECODER;
+    /** Change to true in the final invocation so bytes at teh end of the input are
+     * decoding is done properly and if incmplete will cause a return of mall-formed input.
+     */
+    private boolean endOfInputFlag = false;
+    private final int maxMessageSize;
+    private final Pattern MESSAGE_START;
+    private int findStart = -1;
+    private int findEnd = -1;
 
     private MboxIterator(final File mbox,
                          final Charset charset,
                          final String regexpPattern,
                          final int regexpFlags,
                          final int MAX_MESSAGE_SIZE)
-            throws FileNotFoundException, IOException {
-
-        //TODO: do better exception handling - try to process ome of them maybe?
+            throws FileNotFoundException, IOException, CharConversionException {
         LOG.info("Opening file {}", mbox.getAbsolutePath());
-        fis = new FileInputStream(mbox);
-        final FileChannel fileChannel = fis.getChannel();
-        final MappedByteBuffer byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0,
-                                                            fileChannel.size());
-        final CharsetDecoder DECODER = charset.newDecoder();
-        /*TODO: DECODER.decode() this will try to decode the whole file.
-         * It could be problematic if the file is large (~2gb).
-         * Improve this by working with chunks.
-         */
-        mboxCharBuffer = CharBuffer.allocate(MAX_MESSAGE_SIZE);
+        //TODO: do better exception handling - try to process ome of them maybe?
+        this.maxMessageSize = MAX_MESSAGE_SIZE;
+        this.MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
+        this.DECODER = charset.newDecoder();
+        this.mboxCharBuffer = CharBuffer.allocate(MAX_MESSAGE_SIZE);
+        this.theFile = new FileInputStream(mbox);
+        this.byteBuffer = theFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, theFile.getChannel().size());
+        initMboxIterator(MAX_MESSAGE_SIZE);
+    }
+
+    private void initMboxIterator(final int MAX_MESSAGE_SIZE) throws IOException,
+                                                                     CharConversionException {
         logBufferDetails(byteBuffer);
+        decodeNextCharBuffer();
         logBufferDetails(mboxCharBuffer);
-        CoderResult coderResult = DECODER.decode(byteBuffer, mboxCharBuffer, false);
+        fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
+        fromLineFound = fromLineMathcer.find();
+        if (fromLineFound) {
+            saveFindPositions(fromLineMathcer);
+        } else {
+            throw new IllegalArgumentException("File does not contain From_ lines! Maybe not be a vaild Mbox.");
+        }
+    }
+
+    private void decodeNextCharBuffer() throws CharConversionException {
+        CoderResult coderResult = DECODER.decode(byteBuffer, mboxCharBuffer, endOfInputFlag);
+        updateEndOfInputFlag();
         mboxCharBuffer.flip();
         if (coderResult.isError()) {
-            throw new RuntimeException("Error decoding file! Maybe not be a vaild Mbox.");
+            if (coderResult.isMalformed()) {
+                throw new CharConversionException("Malformed input!");
+            } else if (coderResult.isUnmappable()) {
+                throw new CharConversionException("Unmappable character!");
+            }
         }
-        final Pattern MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
-        fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
-        hasMore = fromLineMathcer.find();
-        if (!hasMore) {
-            throw new RuntimeException("File does not contain From_ lines! "
-                    + "Maybe not be a vaild Mbox.");
+    }
+
+    private void updateEndOfInputFlag() {
+        if (byteBuffer.remaining() <= maxMessageSize) {
+            endOfInputFlag = true;
         }
+    }
+
+    private void saveFindPositions(Matcher lineMatcher) {
+        findStart = lineMatcher.start();
+        findEnd = lineMatcher.end();
     }
 
     @Override
@@ -89,15 +119,13 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
     @Override
     public void close() throws IOException {
-        fis.close();
+        theFile.close();
     }
 
-    @Override
-    protected void finalize() throws Throwable {
-        fis.close();
-        super.finalize();
-    }
-
+    /**
+     * Utility method to log important details about buffers.
+     * @param buffer
+     */
     private static void logBufferDetails(final Buffer buffer) {
         LOG.info("Buffer details: "
                 + "\ncapacity:\t" + buffer.capacity()
@@ -114,21 +142,56 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
         @Override
         public boolean hasNext() {
-            return hasMore;
+            return fromLineFound;
         }
 
+        /**
+         * Returns a CharBuffer instance that contains a message between position and limit.
+         * The array that backs this instance is the whole block of decoded messages.
+         * @return CharBuffer instance
+         */
         @Override
         public CharBuffer next() {
             LOG.info("next() called at offset {}", fromLineMathcer.start());
-            final CharBuffer message = mboxCharBuffer.slice();
-            message.position(fromLineMathcer.start());
+            CharBuffer message = mboxCharBuffer.slice();
+            message.position(fromLineMathcer.end() + 1);
             logBufferDetails(message);
-            hasMore = fromLineMathcer.find();
-            if (hasMore) {
-                LOG.info("We limit the buffer to {} ?? {}",
-                         fromLineMathcer.start(), fromLineMathcer.end());
+            fromLineFound = fromLineMathcer.find();
+            if (fromLineFound) {
+                LOG.info("We limit the buffer to {} ?? {}", fromLineMathcer.start(), fromLineMathcer.end());
                 message.limit(fromLineMathcer.start());
+            } else {
+                LOG.info("No more From_ lines in this buffer. Bytes remaining {}", byteBuffer.remaining());
+                /* We didn't find other From_ lines this means either:
+                 *  - we reached end of mbox and no more messages
+                 *  - we reached end of CharBuffer and need to decode another batch.
+                 */
+                if (byteBuffer.hasRemaining()) {
+                    // decode another batch, but remember to copy the remaining chars first
+                    CharBuffer oldData = mboxCharBuffer.duplicate();
+                    mboxCharBuffer.clear();
+                    logBufferDetails(mboxCharBuffer);
+                    oldData.position();// asda
+                    logBufferDetails(oldData);
+                    while (oldData.hasRemaining()) {
+                        mboxCharBuffer.put(oldData.get());
+                    }
+                    logBufferDetails(mboxCharBuffer);
+                    try {
+                        decodeNextCharBuffer();
+                    } catch (CharConversionException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                    fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
+                    fromLineFound = fromLineMathcer.find();
+                    message = mboxCharBuffer.slice();
+                    fromLineFound = fromLineMathcer.find();
+                    if (fromLineFound) {
+                        message.limit(fromLineMathcer.start());
+                    }
+                }
             }
+            logBufferDetails(message);
             return message;
         }
 
