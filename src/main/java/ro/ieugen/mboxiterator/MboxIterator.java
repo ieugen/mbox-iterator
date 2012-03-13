@@ -28,7 +28,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.util.Iterator;
-import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -82,7 +81,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         fromLineFound = fromLineMathcer.find();
         if (fromLineFound) {
             saveFindPositions(fromLineMathcer);
-        } else {
+        } else if (fromLineMathcer.hitEnd()) {
             throw new IllegalArgumentException("File does not contain From_ lines! Maybe not be a vaild Mbox.");
         }
     }
@@ -125,7 +124,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
      * Utility method to log important details about buffers.
      * @param buffer
      */
-    private static void logBufferDetails(final Buffer buffer) {
+    public static void logBufferDetails(final Buffer buffer) {
         LOG.info("Buffer details: "
                 + "\ncapacity:\t" + buffer.capacity()
                 + "\nlimit:\t" + buffer.limit()
@@ -137,10 +136,22 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                 + "\nclass:\t" + buffer.getClass());
     }
 
+    public static void printCharBuffer(CharBuffer msg) {
+        System.out.println("---------------------------------------------------------------------------- \n" + msg
+                + "\n----------------------------------------------------------------------------");
+    }
+
     private class MessageIterator implements Iterator<CharBuffer> {
 
         @Override
         public boolean hasNext() {
+            if (!fromLineFound) {
+                try {
+                    close();
+                } catch (IOException e) {
+                    throw new RuntimeException("Exception closing file!");
+                }
+            }
             return fromLineFound;
         }
 
@@ -152,12 +163,13 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         @Override
         public CharBuffer next() {
             LOG.info("next() called at offset {}", fromLineMathcer.start());
-            CharBuffer message = mboxCharBuffer.slice();
-            message.position(fromLineMathcer.end() + 1);
-            logBufferDetails(message);
+            CharBuffer message = null;
             fromLineFound = fromLineMathcer.find();
             if (fromLineFound) {
                 LOG.info("We limit the buffer to {} ?? {}", fromLineMathcer.start(), fromLineMathcer.end());
+                message = mboxCharBuffer.slice();
+                logBufferDetails(message);
+                message.position(findEnd + 1);
                 saveFindPositions(fromLineMathcer);
                 message.limit(fromLineMathcer.start());
             } else {
@@ -171,8 +183,9 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                     CharBuffer oldData = mboxCharBuffer.duplicate();
                     mboxCharBuffer.clear();
                     logBufferDetails(mboxCharBuffer);
-                    oldData.position(findEnd + 1);// asda
+                    oldData.position(findStart);// asda
                     logBufferDetails(oldData);
+                    LOG.info("Moving remaining {} chars to new buffer.", oldData.remaining());
                     while (oldData.hasRemaining()) {
                         mboxCharBuffer.put(oldData.get());
                     }
@@ -182,16 +195,23 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                     } catch (CharConversionException ex) {
                         throw new RuntimeException(ex);
                     }
+                    logBufferDetails(mboxCharBuffer);
                     fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
                     fromLineFound = fromLineMathcer.find();
+                    if (fromLineFound) {
+                        LOG.info("Saving find state ");
+                        saveFindPositions(fromLineMathcer);
+                    }
                     message = mboxCharBuffer.slice();
+                    message.position(fromLineMathcer.end() + 1);
                     fromLineFound = fromLineMathcer.find();
                     if (fromLineFound) {
+                        LOG.info("Found next message at!");
+                        saveFindPositions(fromLineMathcer);
                         message.limit(fromLineMathcer.start());
                     }
                 }
             }
-            logBufferDetails(message);
             return message;
         }
 
