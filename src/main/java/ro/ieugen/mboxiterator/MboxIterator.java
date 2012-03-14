@@ -62,7 +62,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                          final int regexpFlags,
                          final int MAX_MESSAGE_SIZE)
             throws FileNotFoundException, IOException, CharConversionException {
-        LOG.info("Opening file {}", mbox.getAbsolutePath());
+        LOG.debug("Opening file {}", mbox.getAbsolutePath());
         //TODO: do better exception handling - try to process ome of them maybe?
         this.maxMessageSize = MAX_MESSAGE_SIZE;
         this.MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
@@ -74,9 +74,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     }
 
     private void initMboxIterator() throws IOException, CharConversionException {
-        logBufferDetails(byteBuffer);
         decodeNextCharBuffer();
-        logBufferDetails(mboxCharBuffer);
         fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
         fromLineFound = fromLineMathcer.find();
         if (fromLineFound) {
@@ -162,18 +160,15 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
          */
         @Override
         public CharBuffer next() {
-            LOG.info("next() called at offset {}", fromLineMathcer.start());
-            CharBuffer message = null;
+            LOG.debug("next() called at offset {}", fromLineMathcer.start());
+            final CharBuffer message;
             fromLineFound = fromLineMathcer.find();
             if (fromLineFound) {
-                LOG.info("We limit the buffer to {} ?? {}", fromLineMathcer.start(), fromLineMathcer.end());
                 message = mboxCharBuffer.slice();
-                logBufferDetails(message);
                 message.position(findEnd + 1);
                 saveFindPositions(fromLineMathcer);
                 message.limit(fromLineMathcer.start());
             } else {
-                LOG.info("No more From_ lines in this buffer. Bytes remaining {}", byteBuffer.remaining());
                 /* We didn't find other From_ lines this means either:
                  *  - we reached end of mbox and no more messages
                  *  - we reached end of CharBuffer and need to decode another batch.
@@ -182,34 +177,31 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                     // decode another batch, but remember to copy the remaining chars first
                     CharBuffer oldData = mboxCharBuffer.duplicate();
                     mboxCharBuffer.clear();
-                    logBufferDetails(mboxCharBuffer);
-                    oldData.position(findStart);// asda
-                    logBufferDetails(oldData);
-                    LOG.info("Moving remaining {} chars to new buffer.", oldData.remaining());
+                    oldData.position(findStart);
                     while (oldData.hasRemaining()) {
                         mboxCharBuffer.put(oldData.get());
                     }
-                    logBufferDetails(mboxCharBuffer);
                     try {
                         decodeNextCharBuffer();
                     } catch (CharConversionException ex) {
                         throw new RuntimeException(ex);
                     }
-                    logBufferDetails(mboxCharBuffer);
                     fromLineMathcer = MESSAGE_START.matcher(mboxCharBuffer);
                     fromLineFound = fromLineMathcer.find();
                     if (fromLineFound) {
-                        LOG.info("Saving find state ");
                         saveFindPositions(fromLineMathcer);
                     }
                     message = mboxCharBuffer.slice();
                     message.position(fromLineMathcer.end() + 1);
                     fromLineFound = fromLineMathcer.find();
                     if (fromLineFound) {
-                        LOG.info("Found next message at!");
                         saveFindPositions(fromLineMathcer);
                         message.limit(fromLineMathcer.start());
                     }
+                } else {
+                    message = mboxCharBuffer.slice();
+                    message.position(findEnd + 1);
+                    message.limit(message.capacity());
                 }
             }
             return message;
