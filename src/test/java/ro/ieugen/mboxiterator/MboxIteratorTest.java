@@ -28,8 +28,6 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Tests for {@link MboxIterator}.
@@ -37,7 +35,6 @@ import org.slf4j.LoggerFactory;
  */
 public class MboxIteratorTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MboxIteratorTest.class);
     @Rule
     public final TestName name = new TestName();
     public static final String MBOX_PATH = "src/test/resources/test-1/mbox.rlug";
@@ -51,7 +48,7 @@ public class MboxIteratorTest {
      */
     @Test
     public void testIterator() throws FileNotFoundException, IOException {
-        LOG.info("Executing {} ", name.getMethodName());
+        System.out.println("Executing " + name.getMethodName());
         iterateWithMaxMessage(DEFAULT_MESSAGE_SIZE);
     }
 
@@ -60,9 +57,9 @@ public class MboxIteratorTest {
      */
     @Test
     public void testIteratorLoop() throws FileNotFoundException, IOException {
-        LOG.info("Executing {} ", name.getMethodName());
+        System.out.println("Executing " + name.getMethodName());
         for (int i = CHARS_IN_MAX_MSG; i < MORE_THAN_FILE_SIZE; i++) {
-            LOG.info("Runinng iteration {} with message size {}", i - CHARS_IN_MAX_MSG, i);
+            System.out.println("Runinng iteration " + (i - CHARS_IN_MAX_MSG) + "  with message size " + i);
             iterateWithMaxMessage(i);
         }
     }

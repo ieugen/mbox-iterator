@@ -20,7 +20,6 @@ package ro.ieugen.mboxiterator;
 
 import com.google.common.base.Charsets;
 import java.io.*;
-import java.nio.Buffer;
 import java.nio.CharBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -30,8 +29,6 @@ import java.nio.charset.CoderResult;
 import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Class that provides an iterator over email messages inside an mbox file.
@@ -40,7 +37,6 @@ import org.slf4j.LoggerFactory;
  */
 public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MboxIterator.class);
     private final FileInputStream theFile;
     private final CharBuffer mboxCharBuffer;
     private Matcher fromLineMathcer;
@@ -62,7 +58,6 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                          final int regexpFlags,
                          final int MAX_MESSAGE_SIZE)
             throws FileNotFoundException, IOException, CharConversionException {
-        LOG.debug("Opening file {}", mbox.getAbsolutePath());
         //TODO: do better exception handling - try to process ome of them maybe?
         this.maxMessageSize = MAX_MESSAGE_SIZE;
         this.MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
@@ -122,17 +117,17 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
      * Utility method to log important details about buffers.
      * @param buffer
      */
-    public static void logBufferDetails(final Buffer buffer) {
-        LOG.info("Buffer details: "
-                + "\ncapacity:\t" + buffer.capacity()
-                + "\nlimit:\t" + buffer.limit()
-                + "\nremaining:\t" + buffer.remaining()
-                + "\nposition:\t" + buffer.position()
-                + "\nis direct:\t" + buffer.isDirect()
-                + "\nhas array:\t" + buffer.hasArray()
-                + "\nbuffer:\t" + buffer.isReadOnly()
-                + "\nclass:\t" + buffer.getClass());
-    }
+//    public static void logBufferDetails(final Buffer buffer) {
+//        LOG.info("Buffer details: "
+//                + "\ncapacity:\t" + buffer.capacity()
+//                + "\nlimit:\t" + buffer.limit()
+//                + "\nremaining:\t" + buffer.remaining()
+//                + "\nposition:\t" + buffer.position()
+//                + "\nis direct:\t" + buffer.isDirect()
+//                + "\nhas array:\t" + buffer.hasArray()
+//                + "\nbuffer:\t" + buffer.isReadOnly()
+//                + "\nclass:\t" + buffer.getClass());
+//    }
 
     public static void printCharBuffer(CharBuffer msg) {
         System.out.println("---------------------------------------------------------------------------- \n" + msg
@@ -160,7 +155,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
          */
         @Override
         public CharBuffer next() {
-            LOG.debug("next() called at offset {}", fromLineMathcer.start());
+//            LOG.debug("next() called at offset {}", fromLineMathcer.start());
             final CharBuffer message;
             fromLineFound = fromLineMathcer.find();
             if (fromLineFound) {
@@ -221,7 +216,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
         return new Builder(file);
     }
 
-    protected static class Builder {
+    public static class Builder {
 
         private final File file;
         private Charset charset = Charsets.UTF_8;
