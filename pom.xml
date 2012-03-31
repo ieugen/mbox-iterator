@@ -52,15 +52,20 @@
             <comments>A business-friendly OSS license</comments>
         </license>
     </licenses>
+    <scm>
+        <url>https://github.com/ieugen/mbox-iterator</url>
+        <connection>git://github.com/ieugen/mbox-iterator.git</connection>
+        <developerConnection>git@github.com:ieugen/mbox-iterator.git</developerConnection>
+    </scm>
     <developers>
         <developer>
             <id>ieugen</id>
             <email>stan.ieugen@gmail.com</email>
             <name>Ioan Eugen Stan</name>
             <roles>
+                <role>lead</role>
                 <role>developer</role>
             </roles>
         </developer>
     </developers>
-
 </project>

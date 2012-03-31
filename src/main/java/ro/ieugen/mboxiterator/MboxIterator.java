@@ -58,7 +58,7 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
                          final int regexpFlags,
                          final int MAX_MESSAGE_SIZE)
             throws FileNotFoundException, IOException, CharConversionException {
-        //TODO: do better exception handling - try to process ome of them maybe?
+        //TODO: do better exception handling - try to process some of them maybe?
         this.maxMessageSize = MAX_MESSAGE_SIZE;
         this.MESSAGE_START = Pattern.compile(regexpPattern, regexpFlags);
         this.DECODER = charset.newDecoder();
@@ -111,27 +111,6 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
     @Override
     public void close() throws IOException {
         theFile.close();
-    }
-
-    /**
-     * Utility method to log important details about buffers.
-     * @param buffer
-     */
-//    public static void logBufferDetails(final Buffer buffer) {
-//        LOG.info("Buffer details: "
-//                + "\ncapacity:\t" + buffer.capacity()
-//                + "\nlimit:\t" + buffer.limit()
-//                + "\nremaining:\t" + buffer.remaining()
-//                + "\nposition:\t" + buffer.position()
-//                + "\nis direct:\t" + buffer.isDirect()
-//                + "\nhas array:\t" + buffer.hasArray()
-//                + "\nbuffer:\t" + buffer.isReadOnly()
-//                + "\nclass:\t" + buffer.getClass());
-//    }
-
-    public static void printCharBuffer(CharBuffer msg) {
-        System.out.println("---------------------------------------------------------------------------- \n" + msg
-                + "\n----------------------------------------------------------------------------");
     }
 
     private class MessageIterator implements Iterator<CharBuffer> {
@@ -220,10 +199,10 @@ public class MboxIterator implements Iterable<CharBuffer>, Closeable {
 
         private final File file;
         private Charset charset = Charsets.UTF_8;
-        private String regexpPattern = "^From \\S+@\\S.*\\d{4}$";
+        private String regexpPattern = FromLinePatterns.DEFAULT;
         private int flags = Pattern.MULTILINE;
-        // default max message size in chars: 10k chars.
-        private int maxMessageSize = 10 * 1024;
+        /** default max message size in chars: ~ 10MB chars. */
+        private int maxMessageSize = 10 * 1024 * 1024;
 
         private Builder(String filePath) {
             this(new File(filePath));
