@@ -1,4 +1,6 @@
-# mbox-iterator
+# mbox-iterator - Integrated in Apache James Mime4j 0.8 !! 
+
+svn.apache.org/repos/asf/james/mime4j/trunk/ 
 
 MboxIterator provides an iterator like interface over mbox files. It's designed
 to allow easy parsing with mime4j.
